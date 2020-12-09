@@ -1,0 +1,10 @@
+syntax = "proto3";
+package proto;
+option go_package = "github.com/xvrzhao/discov/examples/proto";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/empty.proto";
+
+service Greeting {
+  rpc Greet(google.protobuf.UInt32Value) returns(google.protobuf.Empty);
+}
