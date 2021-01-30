@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/golang/protobuf/ptypes/wrappers"
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/xvrzhao/discov"
 	pb "github.com/xvrzhao/discov/examples/proto"
 	"go.etcd.io/etcd/clientv3"
@@ -47,8 +47,8 @@ func main() {
 
 	cli := pb.NewGreetingClient(greetingClientConn)
 
-	for now := range time.Tick(time.Second) {
-		_, err := cli.Greet(context.Background(), &wrappers.UInt32Value{Value: uint32(now.Second())})
+	for range time.Tick(time.Second) {
+		_, err := cli.Greet(context.Background(), new(empty.Empty))
 		if err != nil {
 			log.Print(err)
 		}

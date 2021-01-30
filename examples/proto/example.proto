@@ -6,5 +6,5 @@ import "google/protobuf/wrappers.proto";
 import "google/protobuf/empty.proto";
 
 service Greeting {
-  rpc Greet(google.protobuf.UInt32Value) returns(google.protobuf.Empty);
+  rpc Greet(google.protobuf.Empty) returns(google.protobuf.StringValue);
 }

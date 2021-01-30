@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: greeting-client
+spec:
+  imagePullSecrets:
+    - name: regcred
+  containers:
+    - name: greeting-client
+      image: registry.cn-hangzhou.aliyuncs.com/xvrzhao/greeting-client:latest
