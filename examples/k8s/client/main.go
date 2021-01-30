@@ -19,7 +19,7 @@ func init() {
 
 	var err error
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*3)
-	cc, err = grpc.DialContext(ctx, "discov://headless/greeting-svc:8080", grpc.WithBlock(), grpc.WithInsecure())
+	cc, err = grpc.DialContext(ctx, "discov://k8s.headless.svc/greeting-svc:8080", grpc.WithBlock(), grpc.WithInsecure())
 	if err != nil {
 		panic(err)
 	}

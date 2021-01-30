@@ -14,8 +14,8 @@ func parseTarget(t resolver.Target) (scheme, authority, endpoint string, err err
 		err = fmt.Errorf("the scheme %q matched the discov builder incorrectly", scheme)
 		return
 	}
-	if authority != "etcd" && authority != "headless" {
-		err = fmt.Errorf("invalid authority, must be %q or %q", "etcd", "headless")
+	if authority != "etcd" && authority != "k8s.headless.svc" {
+		err = fmt.Errorf("invalid authority, must be %q or %q", "etcd", "k8s.headless.svc")
 		return
 	}
 	if endpoint == "" {
