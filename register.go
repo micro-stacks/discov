@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// todo integrate CatchErrors into implementation
 // EtcdSrvRecord is a service record to be registered to or unregistered from etcd.
 type EtcdSrvRecord interface {
 	// Register registers the record to etcd.
@@ -30,13 +31,9 @@ func NewEtcdSrvRecord(cli *clientv3.Client, srvName, srvAddr string) (EtcdSrvRec
 		return nil, errors.New("empty srv addr")
 	}
 
-	// validates the availability of cli
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
-	if _, err := cli.Get(ctx, "ping"); err != nil {
-		cancel()
+	if !isEtcdClientAvailable(cli) {
 		return nil, errors.New("unavailable etcd client")
 	}
-	cancel()
 
 	r := &etcdSrvRecord{
 		cli:     cli,
@@ -68,7 +65,7 @@ func (r *etcdSrvRecord) Register() {
 }
 
 func (r *etcdSrvRecord) Unregister(ctx context.Context) error {
-	if r != nil {
+	if r.cancel != nil {
 		r.cancel() // revokes checker, aliveKeeper and consumer
 	}
 

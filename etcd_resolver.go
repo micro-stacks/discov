@@ -8,8 +8,10 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/resolver"
 	"sync"
+	"time"
 )
 
+// etcdResolver is an implementation of gRPC Resolver interface.
 type etcdResolver struct {
 	cli           *clientv3.Client
 	srv           string
@@ -23,8 +25,8 @@ type etcdResolver struct {
 func (r *etcdResolver) ResolveNow(resolver.ResolveNowOptions) {}
 
 func (r *etcdResolver) Close() {
-	r.cancel()
-	r.wg.Wait()
+	r.cancel()  // revoke watcher
+	r.wg.Wait() // wait watcher to be done
 }
 
 func (r *etcdResolver) watcher() {
@@ -36,30 +38,29 @@ func (r *etcdResolver) watcher() {
 	ch := r.cli.Watch(r.ctx, prefix, clientv3.WithPrefix())
 	for {
 		select {
+		case <-r.ctx.Done():
+			return
 		case rsp, ok := <-ch:
 			if !ok {
-				r.cc.ReportError(errors.New("resolver watcher: watch channel has been closed"))
-				return
-			}
-			if rsp.Canceled {
-				r.cc.ReportError(errors.New("resolver watcher: watch channel receive a canceled response"))
+				r.cc.ReportError(errors.New("the watcher of etcdResolver: WatchResponse channel has been closed"))
 				return
 			}
 			if rsp.Err() != nil {
-				r.cc.ReportError(fmt.Errorf("resolver watcher: watch channel receive error: %v", rsp.Err()))
+				r.cc.ReportError(fmt.Errorf("resolver watcher: WatchResponse holds an error: %v", rsp.Err()))
 				return
 			}
 			r.update(prefix)
-		case <-r.ctx.Done():
-			return
 		}
 	}
 }
 
 func (r *etcdResolver) update(keyPrefix string) {
-	rsp, err := r.cli.Get(r.ctx, keyPrefix, clientv3.WithPrefix())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+
+	rsp, err := r.cli.Get(ctx, keyPrefix, clientv3.WithPrefix())
 	if err != nil {
-		r.cc.ReportError(fmt.Errorf("resolver update: %v", err))
+		r.cc.ReportError(fmt.Errorf("resolver update: get keys: %v", err))
 		return
 	}
 

@@ -2,6 +2,7 @@ package discov
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc/resolver"
@@ -45,7 +46,14 @@ func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, opts res
 			err = fmt.Errorf("the authority in target is %q but missing WithEtcdClient option when NewBuilder", authority)
 			return
 		}
+
+		if !isEtcdClientAvailable(b.options.etcdClient) {
+			err = errors.New("the passed etcd client is unavailable")
+			return
+		}
+
 		ctx, cancel := context.WithCancel(context.Background())
+
 		er := &etcdResolver{
 			cli:           b.options.etcdClient,
 			srv:           endpoint,

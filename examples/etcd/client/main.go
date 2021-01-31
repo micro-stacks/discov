@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+// todo improve all examples
+
 const (
 	etcdEndpoints = "127.0.0.1:2379"
 )

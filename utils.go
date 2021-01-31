@@ -1,11 +1,14 @@
 package discov
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc/resolver"
 	"net"
 	"strings"
+	"time"
 )
 
 func parseTarget(t resolver.Target) (scheme, authority, endpoint string, err error) {
@@ -51,3 +54,13 @@ func formatIP(addr string) (addrIP string, ok bool) {
 	return "[" + addr + "]", true
 }
 
+func isEtcdClientAvailable(cli *clientv3.Client) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+
+	if _, err := cli.Get(ctx, "ping"); err != nil {
+		return false
+	}
+
+	return true
+}
