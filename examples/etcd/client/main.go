@@ -2,57 +2,50 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/xvrzhao/discov"
 	pb "github.com/xvrzhao/discov/examples/proto"
 	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
-	"log"
-	"strings"
+	"os"
 	"time"
 )
 
-// todo improve all examples
-
 const (
-	etcdEndpoints = "127.0.0.1:2379"
+	etcdAddr = "etcd:2379"
 )
 
-// greetingClientConn is a process-level variable, it used by all greetingClient for multiplexing.
-var greetingClientConn *grpc.ClientConn
-
-// other ClientConns ...
+var greetingSrv pb.GreetingClient
 
 func init() {
-	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   strings.Split(etcdEndpoints, ","),
-		DialTimeout: time.Second * 3,
-	})
+	grpclog.SetLoggerV2(grpclog.NewLoggerV2(os.Stdout, os.Stderr, os.Stderr))
+
+	cli, err := clientv3.New(clientv3.Config{Endpoints: []string{etcdAddr}, DialTimeout: time.Second})
 	if err != nil {
 		panic(err)
 	}
-	// note: should not close cli, it always being used by resolver
 
 	resolver.Register(discov.NewBuilder(discov.WithEtcdClient(cli)))
 
-	greetingClientConn, err = grpc.Dial("discov://etcd/greeting", grpc.WithBlock(), grpc.WithInsecure())
+	greetingClientConn, err := grpc.Dial("discov://etcd/greeting", grpc.WithBlock(), grpc.WithInsecure())
 	if err != nil {
 		panic(err)
 	}
-	// dial other services ...
+
+	greetingSrv = pb.NewGreetingClient(greetingClientConn)
 }
 
 func main() {
-	fmt.Println("start")
-
-	cli := pb.NewGreetingClient(greetingClientConn)
+	grpclog.Infoln("rpc client start")
 
 	for range time.Tick(time.Second) {
-		_, err := cli.Greet(context.Background(), new(empty.Empty))
+		resp, err := greetingSrv.Greet(context.TODO(), new(empty.Empty))
 		if err != nil {
-			log.Print(err)
+			grpclog.Errorln(err)
 		}
+
+		grpclog.Infof("receive response: %s\n", resp.Value)
 	}
 }

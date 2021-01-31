@@ -1,0 +1,27 @@
+version: "3"
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.4.0
+    environment:
+      ETCD_NAME: default
+      ETCD_DATA_DIR: "/etcd-data"
+      ETCD_LISTEN_CLIENT_URLS: "http://0.0.0.0:2379"
+      ETCD_LISTEN_PEER_URLS: "http://0.0.0.0:2380"
+      ETCD_ADVERTISE_CLIENT_URLS: "http://0.0.0.0:2379"
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: "http://0.0.0.0:2380"
+      ETCD_INITIAL_CLUSTER: "default=http://0.0.0.0:2380"
+      ETCD_LOGGER: zap
+  rpc_client:
+    build:
+      context: ../../
+      dockerfile: examples/etcd/client/Dockerfile
+    depends_on:
+      - etcd
+      - rpc_server
+  rpc_server:
+    build:
+      context: ../../
+      dockerfile: examples/etcd/server/Dockerfile
+    depends_on:
+      - etcd
+    scale: 3

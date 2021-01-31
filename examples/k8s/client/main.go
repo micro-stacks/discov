@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+// todo improve all examples
+
 var cc *grpc.ClientConn
 
 func init() {

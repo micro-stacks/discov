@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+// TODO: code review and improvement
+
 type k8sHeadlessSvcResolver struct {
 	host          string
 	port          string

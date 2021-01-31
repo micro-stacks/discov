@@ -42,11 +42,11 @@ func (r *etcdResolver) watcher() {
 			return
 		case rsp, ok := <-ch:
 			if !ok {
-				r.cc.ReportError(errors.New("the watcher of etcdResolver: WatchResponse channel has been closed"))
+				r.cc.ReportError(errors.New("watcher of etcdResolver: WatchResponse channel has been closed"))
 				return
 			}
 			if rsp.Err() != nil {
-				r.cc.ReportError(fmt.Errorf("resolver watcher: WatchResponse holds an error: %v", rsp.Err()))
+				r.cc.ReportError(fmt.Errorf("watcher of etcdResolver: WatchResponse holds an error: %v", rsp.Err()))
 				return
 			}
 			r.update(prefix)
