@@ -11,23 +11,49 @@ import (
 	"time"
 )
 
+const (
+	authorityEtcd           = "etcd"
+	authorityK8sHeadlessSvc = "k8s.headless.svc"
+)
+
+var (
+	supportedAuthorities = []string{
+		authorityEtcd,
+		authorityK8sHeadlessSvc,
+		// ...
+	}
+
+	ErrUnsupportedAuthorityInTarget = errors.New("unsupported authority in target")
+	ErrEmptyAuthorityInTarget       = errors.New("empty authority in target")
+)
+
+func isSupportedAuthority(a string) bool {
+	for i := range supportedAuthorities {
+		if a == supportedAuthorities[i] {
+			return true
+		}
+	}
+
+	return false
+}
+
 func parseTarget(t resolver.Target) (scheme, authority, endpoint string, err error) {
 	scheme, authority, endpoint = t.Scheme, t.Authority, t.Endpoint
-	if scheme != "discov" {
-		err = fmt.Errorf("the scheme %q matched the discov builder incorrectly", scheme)
+
+	if !isSupportedAuthority(authority) {
+		err = ErrUnsupportedAuthorityInTarget
 		return
 	}
-	if authority != "etcd" && authority != "k8s.headless.svc" {
-		err = fmt.Errorf("invalid authority, must be %q or %q", "etcd", "k8s.headless.svc")
-		return
-	}
+
 	if endpoint == "" {
-		err = errors.New("endpoint is empty")
+		err = ErrEmptyAuthorityInTarget
 		return
 	}
+
 	return
 }
 
+// TODO: modify function name
 func parseEndpoint(endpoint string) (dnsName, port string, err error) {
 	s := strings.Split(endpoint, ":")
 	if len(s) != 2 {

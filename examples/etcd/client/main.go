@@ -43,7 +43,8 @@ func main() {
 	for range time.Tick(time.Second) {
 		resp, err := greetingSrv.Greet(context.TODO(), new(empty.Empty))
 		if err != nil {
-			grpclog.Errorln(err)
+			grpclog.Errorf("call greet failed: %v\n", err)
+			continue
 		}
 
 		grpclog.Infof("receive response: %s\n", resp.Value)

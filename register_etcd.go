@@ -44,6 +44,7 @@ func NewEtcdSrvRecord(cli *clientv3.Client, srvName, srvAddr string) (EtcdSrvRec
 		cli:      cli,
 		ctx:      nil,
 		cancel:   nil,
+		wg:       sync.WaitGroup{},
 		errs:     nil,
 		errsLock: sync.Mutex{},
 		srvName:  srvName,
@@ -60,6 +61,7 @@ type etcdSrvRecord struct {
 	// used as revoking checker, aliveKeeper and consumer
 	ctx    context.Context
 	cancel context.CancelFunc
+	wg     sync.WaitGroup
 
 	errs     chan error // note: never close after initialization
 	errsLock sync.Mutex
@@ -73,12 +75,14 @@ func (r *etcdSrvRecord) Register() {
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	r.initErrorChannel()
 
+	r.wg.Add(1)
 	go r.checker()
 }
 
 func (r *etcdSrvRecord) Unregister(ctx context.Context) error {
 	if r.cancel != nil {
 		r.cancel() // revokes checker, aliveKeeper and consumer
+		r.wg.Wait()
 	}
 
 	key := fmt.Sprintf("%s/%v", getEtcdKeyPrefix(r.srvName), r.srvAddr)
@@ -91,6 +95,7 @@ func (r *etcdSrvRecord) Unregister(ctx context.Context) error {
 }
 
 func (r *etcdSrvRecord) checker() {
+	defer r.wg.Done()
 
 	key := fmt.Sprintf("%s/%v", getEtcdKeyPrefix(r.srvName), r.srvAddr)
 	ticker := time.NewTicker(r.srvTTL)
@@ -101,48 +106,50 @@ func (r *etcdSrvRecord) checker() {
 			// revoke this goroutine
 			ticker.Stop()
 			return
-		default:
-			ctx, cancel := context.WithTimeout(context.Background(), r.srvTTL)
-			resp, err := r.cli.Get(ctx, key)
-			if err != nil {
-				cancel()
-				r.pushErr(fmt.Errorf("CHECKER_ERROR: failed to get key: %v", err))
-				break
-			}
-
-			if resp.Count <= 0 {
-				lease, err := r.cli.Grant(ctx, r.srvTTL.Milliseconds()/1000)
-				if err != nil {
-					cancel()
-					r.pushErr(fmt.Errorf("CHECKER_ERROR: failed to grant lease: %v", err))
-					break
-				}
-
-				_, err = r.cli.Put(ctx, key, r.srvAddr, clientv3.WithLease(lease.ID))
-				if err != nil {
-					cancel()
-					r.pushErr(fmt.Errorf("CHECKER_ERROR: failed to put key: %v", err))
-					break
-				}
-
-				ch, err := r.cli.KeepAlive(r.ctx, lease.ID) // aliveKeeper
-				if err != nil {
-					cancel()
-					r.pushErr(fmt.Errorf("CHECKER_ERROR: failed to keep alive: %v", err))
-					break
-				}
-
-				go r.consumer(ch)
-			}
-
-			cancel()
+		case <-ticker.C:
 		}
 
-		<-ticker.C
+		ctx, cancel := context.WithTimeout(context.Background(), r.srvTTL)
+		resp, err := r.cli.Get(ctx, key)
+		if err != nil {
+			cancel()
+			r.pushErr(fmt.Errorf("CHECKER_ERROR: failed to get key: %v", err))
+			continue
+		}
+
+		if resp.Count <= 0 {
+			lease, err := r.cli.Grant(ctx, r.srvTTL.Milliseconds()/1000)
+			if err != nil {
+				cancel()
+				r.pushErr(fmt.Errorf("CHECKER_ERROR: failed to grant lease: %v", err))
+				continue
+			}
+
+			_, err = r.cli.Put(ctx, key, r.srvAddr, clientv3.WithLease(lease.ID))
+			if err != nil {
+				cancel()
+				r.pushErr(fmt.Errorf("CHECKER_ERROR: failed to put key: %v", err))
+				continue
+			}
+
+			ch, err := r.cli.KeepAlive(r.ctx, lease.ID) // aliveKeeper
+			if err != nil {
+				cancel()
+				r.pushErr(fmt.Errorf("CHECKER_ERROR: failed to keep alive: %v", err))
+				continue
+			}
+
+			r.wg.Add(1)
+			go r.consumer(ch)
+		}
+
+		cancel()
 	}
 }
 
 func (r *etcdSrvRecord) consumer(ch <-chan *clientv3.LeaseKeepAliveResponse) {
+	defer r.wg.Done()
+
 	for {
 		select {
 		case <-r.ctx.Done():

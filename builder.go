@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// builder implements the gRPC interface of resolver.Builder.
 type builder struct {
 	options *builderOptions
 }
@@ -26,6 +27,22 @@ type BuilderOption struct {
 	applyTo func(*builderOptions)
 }
 
+func WithEtcdClient(cli *clientv3.Client) BuilderOption {
+	return BuilderOption{
+		applyTo: func(options *builderOptions) {
+			options.etcdClient = cli
+		},
+	}
+}
+
+func WithHeadlessLookupFrequency(d time.Duration) BuilderOption {
+	return BuilderOption{
+		applyTo: func(options *builderOptions) {
+			options.headlessLookupFrequency = d
+		},
+	}
+}
+
 func NewBuilder(opts ...BuilderOption) *builder {
 	options := new(builderOptions)
 	for _, option := range opts {
@@ -34,14 +51,18 @@ func NewBuilder(opts ...BuilderOption) *builder {
 	return &builder{options: options}
 }
 
+func (b *builder) Scheme() string {
+	return "discov"
+}
+
 func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (r resolver.Resolver, err error) {
 	_, authority, endpoint, err := parseTarget(target)
 	if err != nil {
-		err = fmt.Errorf("parseTarget: %v", err)
+		err = fmt.Errorf("parse target: %v", err)
 		return
 	}
 
-	if authority == "etcd" {
+	if authority == authorityEtcd {
 		if b.options.etcdClient == nil {
 			err = fmt.Errorf("the authority in target is %q but missing WithEtcdClient option when NewBuilder", authority)
 			return
@@ -70,7 +91,7 @@ func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, opts res
 		return
 	}
 
-	if authority == "k8s.headless.svc" {
+	if authority == authorityK8sHeadlessSvc {
 		var host, port string
 		host, port, err = parseEndpoint(endpoint)
 		if err != nil {
@@ -103,26 +124,6 @@ func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, opts res
 		return
 	}
 
-	err = fmt.Errorf("invalid authority %q in target", authority)
+	err = ErrUnsupportedAuthorityInTarget
 	return
-}
-
-func (b *builder) Scheme() string {
-	return "discov"
-}
-
-func WithEtcdClient(cli *clientv3.Client) BuilderOption {
-	return BuilderOption{
-		applyTo: func(options *builderOptions) {
-			options.etcdClient = cli
-		},
-	}
-}
-
-func WithHeadlessLookupFrequency(d time.Duration) BuilderOption {
-	return BuilderOption{
-		applyTo: func(options *builderOptions) {
-			options.headlessLookupFrequency = d
-		},
-	}
 }
