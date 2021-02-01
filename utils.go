@@ -64,3 +64,7 @@ func isEtcdClientAvailable(cli *clientv3.Client) bool {
 
 	return true
 }
+
+func makeErrorChannel() chan error {
+	return make(chan error, 1<<6)
+}

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// todo improve all examples
+// TODO: improve k8s examples
 
 var cc *grpc.ClientConn
 

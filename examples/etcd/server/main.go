@@ -73,7 +73,11 @@ func registerSrv() {
 		}
 	}()
 
-	// TODO: handle record errors
+	go func() {
+		for err := range record.CatchRuntimeErrors() {
+			grpclog.Errorf("catch runtime error of service register: %v\n", err)
+		}
+	}()
 }
 
 func init() {

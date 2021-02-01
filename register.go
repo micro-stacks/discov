@@ -5,11 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"go.etcd.io/etcd/clientv3"
+	"sync"
 	"time"
 )
 
-// todo integrate CatchErrors into implementation
-// EtcdSrvRecord is a service record to be registered to or unregistered from etcd.
+// EtcdSrvRecord is a service record to be registered to or
+// unregistered from etcd.
 type EtcdSrvRecord interface {
 	// Register registers the record to etcd.
 	// This method should be called when the service starts.
@@ -17,6 +18,10 @@ type EtcdSrvRecord interface {
 	// Unregister unregisters the record from etcd.
 	// This method should be called when the service is closed.
 	Unregister(context.Context) error
+	// CatchRuntimeErrors catches runtime errors.
+	// Since the EtcdSrvRecord spawns goroutines to keep heartbeat
+	// to etcd after calling Register, some errors may occur at runtime.
+	CatchRuntimeErrors() <-chan error
 }
 
 // NewEtcdSrvRecord construct a service record.
@@ -36,12 +41,14 @@ func NewEtcdSrvRecord(cli *clientv3.Client, srvName, srvAddr string) (EtcdSrvRec
 	}
 
 	r := &etcdSrvRecord{
-		cli:     cli,
-		ctx:     nil,
-		cancel:  nil,
-		srvName: srvName,
-		srvAddr: srvAddr,
-		srvTTL:  time.Second * 3,
+		cli:      cli,
+		ctx:      nil,
+		cancel:   nil,
+		errs:     nil,
+		errsLock: sync.Mutex{},
+		srvName:  srvName,
+		srvAddr:  srvAddr,
+		srvTTL:   time.Second * 3,
 	}
 
 	return r, nil
@@ -54,6 +61,9 @@ type etcdSrvRecord struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
+	errs     chan error // note: never close after initialization
+	errsLock sync.Mutex
+
 	srvName string
 	srvAddr string
 	srvTTL  time.Duration
@@ -61,6 +71,8 @@ type etcdSrvRecord struct {
 
 func (r *etcdSrvRecord) Register() {
 	r.ctx, r.cancel = context.WithCancel(context.Background())
+	r.initErrorChannel()
+
 	go r.checker()
 }
 
@@ -94,7 +106,7 @@ func (r *etcdSrvRecord) checker() {
 			resp, err := r.cli.Get(ctx, key)
 			if err != nil {
 				cancel()
-				pushError(fmt.Errorf("CHECKER_ERROR: failed to get key: %v", err))
+				r.pushErr(fmt.Errorf("CHECKER_ERROR: failed to get key: %v", err))
 				break
 			}
 
@@ -102,21 +114,21 @@ func (r *etcdSrvRecord) checker() {
 				lease, err := r.cli.Grant(ctx, r.srvTTL.Milliseconds()/1000)
 				if err != nil {
 					cancel()
-					pushError(fmt.Errorf("CHECKER_ERROR: failed to grant lease: %v", err))
+					r.pushErr(fmt.Errorf("CHECKER_ERROR: failed to grant lease: %v", err))
 					break
 				}
 
 				_, err = r.cli.Put(ctx, key, r.srvAddr, clientv3.WithLease(lease.ID))
 				if err != nil {
 					cancel()
-					pushError(fmt.Errorf("CHECKER_ERROR: failed to put key: %v", err))
+					r.pushErr(fmt.Errorf("CHECKER_ERROR: failed to put key: %v", err))
 					break
 				}
 
 				ch, err := r.cli.KeepAlive(r.ctx, lease.ID) // aliveKeeper
 				if err != nil {
 					cancel()
-					pushError(fmt.Errorf("CHECKER_ERROR: failed to keep alive: %v", err))
+					r.pushErr(fmt.Errorf("CHECKER_ERROR: failed to keep alive: %v", err))
 					break
 				}
 
@@ -137,9 +149,33 @@ func (r *etcdSrvRecord) consumer(ch <-chan *clientv3.LeaseKeepAliveResponse) {
 			return
 		case _, ok := <-ch:
 			if !ok {
-				pushError(errors.New("KEEP_ALIVE_RESP_CONSUMER_WARNING: underlying keep alive stream is interrupted"))
+				r.pushErr(errors.New("KEEP_ALIVE_RESP_CONSUMER_WARNING: underlying keep alive stream is interrupted"))
 				return
 			}
 		}
+	}
+}
+
+func (r *etcdSrvRecord) pushErr(err error) {
+	r.initErrorChannel()
+
+	select {
+	case r.errs <- err:
+	default: // channel is full, discard err
+	}
+}
+
+func (r *etcdSrvRecord) CatchRuntimeErrors() <-chan error {
+	r.initErrorChannel()
+
+	return r.errs
+}
+
+func (r *etcdSrvRecord) initErrorChannel() {
+	r.errsLock.Lock()
+	defer r.errsLock.Unlock()
+
+	if r.errs == nil {
+		r.errs = makeErrorChannel()
 	}
 }
