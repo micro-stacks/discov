@@ -12,7 +12,7 @@ Discov is a generic gRPC service registration and discovery / load balancing com
 
 ## Architecture
 
-![architecture](./arch.svg)
+![architecture](./arch.png)
 
 ## Examples
 

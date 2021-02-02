@@ -10,7 +10,7 @@ Discov 是通用的 gRPC 服务注册发现/负载均衡组件。
 
 ## 架构
 
-![architecture](./arch.svg)
+![architecture](./arch.png)
 
 ## 使用示例
 
