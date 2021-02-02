@@ -19,8 +19,8 @@ type builder struct {
 type builderOptions struct {
 	// etcd
 	etcdClient *clientv3.Client
-	// k8s headless svc
-	headlessLookupFrequency time.Duration
+	// dns
+	dnsPollingInterval time.Duration
 }
 
 type BuilderOption struct {
@@ -35,10 +35,10 @@ func WithEtcdClient(cli *clientv3.Client) BuilderOption {
 	}
 }
 
-func WithHeadlessLookupFrequency(d time.Duration) BuilderOption {
+func WithDNSPollingInterval(d time.Duration) BuilderOption {
 	return BuilderOption{
 		applyTo: func(options *builderOptions) {
-			options.headlessLookupFrequency = d
+			options.dnsPollingInterval = d
 		},
 	}
 }
@@ -64,7 +64,8 @@ func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, opts res
 
 	if authority == authorityEtcd {
 		if b.options.etcdClient == nil {
-			err = fmt.Errorf("the authority in target is %q but missing WithEtcdClient option when NewBuilder", authority)
+			err = fmt.Errorf("the authority in target is %q but missing WithEtcdClient option when NewBuilder",
+				authority)
 			return
 		}
 
@@ -91,39 +92,46 @@ func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, opts res
 		return
 	}
 
-	if authority == authorityK8sHeadlessSvc {
-		var host, port string
-		host, port, err = parseEndpoint(endpoint)
+	if authority == authorityDNS {
+		var (
+			dnsName string
+			port    int
+		)
+
+		dnsName, port, err = parseEndpointInDNSTarget(endpoint)
 		if err != nil {
-			err = fmt.Errorf("parseEndpoint: %v", err)
+			err = fmt.Errorf("parse endpoint failed: %v", err)
 			return
 		}
-		if b.options.headlessLookupFrequency == 0 {
-			err = fmt.Errorf("the authority in target is %q but missing WithHeadlessLookupFrequency option when NewBuilder", authority)
+
+		if b.options.dnsPollingInterval == 0 {
+			err = fmt.Errorf("the authority in target is %q but missing WithDNSPollingInterval option when NewBuilder",
+				authority)
 			return
 		}
+
 		ctx, cancel := context.WithCancel(context.Background())
-		kr := &k8sHeadlessSvcResolver{
-			host:          host,
-			port:          port,
-			resolver:      net.DefaultResolver,
-			ctx:           ctx,
-			cancel:        cancel,
-			cc:            cc,
-			rn:            make(chan struct{}),
-			freq:          b.options.headlessLookupFrequency,
-			wg:            sync.WaitGroup{},
-			disableSrvCfg: opts.DisableServiceConfig,
+		dr := &dnsResolver{
+			dnsName:         dnsName,
+			port:            port,
+			resolver:        net.DefaultResolver,
+			pollingInterval: b.options.dnsPollingInterval,
+			ctx:             ctx,
+			cancel:          cancel,
+			wg:              sync.WaitGroup{},
+			cc:              cc,
+			rn:              make(chan struct{}, 1),
+			disableSrvCfg:   opts.DisableServiceConfig,
 		}
 
-		kr.wg.Add(1)
-		go kr.watcher()
-		kr.ResolveNow(resolver.ResolveNowOptions{})
+		dr.wg.Add(1)
+		go dr.watcher()
+		dr.ResolveNow(resolver.ResolveNowOptions{})
 
-		r = kr
+		r = dr
 		return
 	}
 
-	err = ErrUnsupportedAuthorityInTarget
+	err = errUnsupportedAuthorityInTarget
 	return
 }

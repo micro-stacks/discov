@@ -7,24 +7,26 @@ import (
 	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc/resolver"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	authorityEtcd           = "etcd"
-	authorityK8sHeadlessSvc = "k8s.headless.svc"
+	authorityEtcd = "etcd"
+	authorityDNS  = "dns"
 )
 
 var (
 	supportedAuthorities = []string{
 		authorityEtcd,
-		authorityK8sHeadlessSvc,
+		authorityDNS,
 		// ...
 	}
 
-	ErrUnsupportedAuthorityInTarget = errors.New("unsupported authority in target")
-	ErrEmptyAuthorityInTarget       = errors.New("empty authority in target")
+	errUnsupportedAuthorityInTarget = errors.New("unsupported authority in target")
+	errEmptyAuthorityInTarget       = errors.New("empty authority in target")
+	errInvalidEndpointInDNSTarget   = errors.New("invalid endpoint, must be in form of `DNSName:port`")
 )
 
 func isSupportedAuthority(a string) bool {
@@ -41,26 +43,39 @@ func parseTarget(t resolver.Target) (scheme, authority, endpoint string, err err
 	scheme, authority, endpoint = t.Scheme, t.Authority, t.Endpoint
 
 	if !isSupportedAuthority(authority) {
-		err = ErrUnsupportedAuthorityInTarget
+		err = errUnsupportedAuthorityInTarget
 		return
 	}
 
 	if endpoint == "" {
-		err = ErrEmptyAuthorityInTarget
+		err = errEmptyAuthorityInTarget
 		return
 	}
 
 	return
 }
 
-// TODO: modify function name
-func parseEndpoint(endpoint string) (dnsName, port string, err error) {
+func parseEndpointInDNSTarget(endpoint string) (DNSName string, port int, err error) {
 	s := strings.Split(endpoint, ":")
-	if len(s) != 2 {
-		err = errors.New("invalid endpoint, must be in form of `dnsName:port`")
+
+	// no port specified, default 80
+	if len(s) == 1 {
+		DNSName, port = s[0], 80
 		return
 	}
-	dnsName, port = s[0], s[1]
+
+	if len(s) != 2 {
+		err = errInvalidEndpointInDNSTarget
+		return
+	}
+
+	port, err = strconv.Atoi(s[1])
+	if err != nil {
+		err = errInvalidEndpointInDNSTarget
+		return
+	}
+
+	DNSName = s[0]
 	return
 }
 
@@ -74,9 +89,11 @@ func formatIP(addr string) (addrIP string, ok bool) {
 	if ip == nil {
 		return "", false
 	}
+
 	if ip.To4() != nil {
 		return addr, true
 	}
+
 	return "[" + addr + "]", true
 }
 

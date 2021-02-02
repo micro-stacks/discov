@@ -1,4 +1,4 @@
-## Examples of etcd scenario
+## Examples of Etcd Scenario
 
 Examples of usage when etcd is used as the registry.
 

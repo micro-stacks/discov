@@ -2,40 +2,41 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/xvrzhao/discov"
-	"github.com/xvrzhao/discov/examples/proto"
+	pb "github.com/xvrzhao/discov/examples/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
-	"log"
+	"os"
 	"time"
 )
 
-// TODO: improve k8s examples
-
-var cc *grpc.ClientConn
+var greetingSrv pb.GreetingClient
 
 func init() {
-	resolver.Register(discov.NewBuilder(discov.WithHeadlessLookupFrequency(time.Second)))
+	grpclog.SetLoggerV2(grpclog.NewLoggerV2(os.Stdout, os.Stderr, os.Stderr))
 
-	var err error
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*3)
-	cc, err = grpc.DialContext(ctx, "discov://k8s.headless.svc/greeting-svc:8080", grpc.WithBlock(), grpc.WithInsecure())
+	resolver.Register(discov.NewBuilder(discov.WithDNSPollingInterval(time.Second)))
+
+	greetingClientConn, err := grpc.Dial("discov://dns/greeting-svc:8080", grpc.WithBlock(), grpc.WithInsecure())
 	if err != nil {
 		panic(err)
 	}
+
+	greetingSrv = pb.NewGreetingClient(greetingClientConn)
 }
 
 func main() {
-	fmt.Println("client run")
-	cli := proto.NewGreetingClient(cc)
+	grpclog.Infoln("rpc client start")
+
 	for range time.Tick(time.Second) {
-		res, err := cli.Greet(context.Background(), new(empty.Empty))
+		resp, err := greetingSrv.Greet(context.TODO(), new(empty.Empty))
 		if err != nil {
-			log.Print(err)
+			grpclog.Errorf("call greet failed: %v\n", err)
 			continue
 		}
-		fmt.Println(res.Value)
+
+		grpclog.Infof("receive response: %s\n", resp.Value)
 	}
 }
