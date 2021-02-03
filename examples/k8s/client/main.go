@@ -19,7 +19,7 @@ func init() {
 
 	resolver.Register(discov.NewBuilder(discov.WithDNSPollingInterval(time.Second)))
 
-	greetingClientConn, err := grpc.Dial("discov://dns/greeting-svc:8080", grpc.WithBlock(), grpc.WithInsecure())
+	greetingClientConn, err := grpc.Dial("discov://dns/greeting-svc:8080", grpc.WithInsecure())
 	if err != nil {
 		panic(err)
 	}
