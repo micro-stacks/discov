@@ -19,7 +19,7 @@ Discov 是通用的 gRPC 服务注册发现/负载均衡组件。
 
 ## 文档
 
-[pkg.go.dev](https://pkg.go.dev/github.com/xvrzhao/discov)
+[pkg.go.dev](https://pkg.go.dev/github.com/micro-stacks/discov)
 
 ## 开源协议
 

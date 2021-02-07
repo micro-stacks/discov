@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/golang/protobuf/ptypes/wrappers"
-	"github.com/xvrzhao/discov"
-	pb "github.com/xvrzhao/discov/examples/proto"
+	"github.com/micro-stacks/discov"
+	pb "github.com/micro-stacks/discov/examples/proto"
 	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
@@ -49,6 +49,16 @@ func GetIntranetIP() (string, error) {
 	return "", errors.New("unable to get the intranet IP")
 }
 
+type etcdKvBuilder struct{}
+
+func (*etcdKvBuilder) BuildKey(srvName, srvAddr string) (key string) {
+	return fmt.Sprintf("/srvs/%s/%s", srvName, srvAddr)
+}
+
+func (*etcdKvBuilder) BuildValue(_, srvAddr string) (value string) {
+	return srvAddr
+}
+
 func registerSrv() {
 	grpclog.Infoln("register the service")
 
@@ -61,6 +71,7 @@ func registerSrv() {
 	if err != nil {
 		panic(err)
 	}
+	record.RegisterKvBuilder(new(etcdKvBuilder))
 	record.Register()
 
 	ch := make(chan os.Signal, 1)

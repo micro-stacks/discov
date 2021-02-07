@@ -1,4 +1,4 @@
-module github.com/xvrzhao/discov
+module github.com/micro-stacks/discov
 
 go 1.15
 

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/golang/protobuf/ptypes/wrappers"
-	pb "github.com/xvrzhao/discov/examples/proto"
+	pb "github.com/micro-stacks/discov/examples/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"net"

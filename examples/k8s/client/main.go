@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/xvrzhao/discov"
-	pb "github.com/xvrzhao/discov/examples/proto"
+	"github.com/micro-stacks/discov"
+	pb "github.com/micro-stacks/discov/examples/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"

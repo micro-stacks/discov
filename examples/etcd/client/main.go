@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/xvrzhao/discov"
-	pb "github.com/xvrzhao/discov/examples/proto"
+	"github.com/micro-stacks/discov"
+	pb "github.com/micro-stacks/discov/examples/proto"
 	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
@@ -19,6 +20,16 @@ const (
 
 var greetingSrv pb.GreetingClient
 
+type etcdKvResolver struct{}
+
+func (r *etcdKvResolver) GetKeyPrefixForSrv(srvName string) (prefix string) {
+	return fmt.Sprintf("/srvs/%s", srvName)
+}
+
+func (r *etcdKvResolver) ResolveSrvAddr(value []byte) (srvAddr string) {
+	return string(value)
+}
+
 func init() {
 	grpclog.SetLoggerV2(grpclog.NewLoggerV2(os.Stdout, os.Stderr, os.Stderr))
 
@@ -27,7 +38,10 @@ func init() {
 		panic(err)
 	}
 
-	resolver.Register(discov.NewBuilder(discov.WithEtcdClient(cli)))
+	resolver.Register(discov.NewBuilder(
+		discov.WithEtcdClient(cli),
+		discov.WithEtcdKvResolver(new(etcdKvResolver)),
+	))
 
 	greetingClientConn, err := grpc.Dial("discov://etcd/greeting", grpc.WithBlock(), grpc.WithInsecure())
 	if err != nil {

@@ -21,7 +21,7 @@ Discov is a generic gRPC service registration and discovery / load balancing com
 
 ## Documentation
 
-[pkg.go.dev](https://pkg.go.dev/github.com/xvrzhao/discov)
+[pkg.go.dev](https://pkg.go.dev/github.com/micro-stacks/discov)
 
 ## License
 
