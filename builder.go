@@ -11,22 +11,28 @@ import (
 	"time"
 )
 
-// builder implements the gRPC interface of resolver.Builder.
-type builder struct {
+// Builder implements the gRPC resolver.Builder interface.
+// It Builds a discov Resolver that implements the gRPC
+// resolver.Resolver interface.
+type Builder struct {
 	options *builderOptions
 }
 
 type builderOptions struct {
 	// etcd
 	etcdClient *clientv3.Client
+	kvResolver EtcdKvResolver
 	// dns
 	dnsPollingInterval time.Duration
 }
 
+// BuilderOption is the option that passed to NewBuilder function.
 type BuilderOption struct {
 	applyTo func(*builderOptions)
 }
 
+// WithEtcdClient injects an etcd client. The option is required
+// when the authority of discov is etcd.
 func WithEtcdClient(cli *clientv3.Client) BuilderOption {
 	return BuilderOption{
 		applyTo: func(options *builderOptions) {
@@ -35,6 +41,18 @@ func WithEtcdClient(cli *clientv3.Client) BuilderOption {
 	}
 }
 
+// WithEtcdKvResolver injects a custom EtcdKvResolver implementation
+// to determine how the internal etcdResolver watches keys and retrieves addrs.
+func WithEtcdKvResolver(r EtcdKvResolver) BuilderOption {
+	return BuilderOption{
+		applyTo: func(options *builderOptions) {
+			options.kvResolver = r
+		},
+	}
+}
+
+// WithDNSPollingInterval customizes the polling frequency of
+// the internal dnsResolver.
 func WithDNSPollingInterval(d time.Duration) BuilderOption {
 	return BuilderOption{
 		applyTo: func(options *builderOptions) {
@@ -43,19 +61,28 @@ func WithDNSPollingInterval(d time.Duration) BuilderOption {
 	}
 }
 
-func NewBuilder(opts ...BuilderOption) *builder {
+// NewBuilder returns a Builder that contain the passed options.
+func NewBuilder(opts ...BuilderOption) *Builder {
 	options := new(builderOptions)
 	for _, option := range opts {
 		option.applyTo(options)
 	}
-	return &builder{options: options}
+	return &Builder{options: options}
 }
 
-func (b *builder) Scheme() string {
+// Scheme returns the scheme "discov" correspond to the Builder.
+func (b *Builder) Scheme() string {
 	return "discov"
 }
 
-func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (r resolver.Resolver, err error) {
+// Build creates a new resolver for the given target.
+//
+// If the authority of target that passed to grpc dial method
+// is etcd, Build returns an internal etcdResolver, if the
+// authority is dns, returns an internal dnsResolver.
+//
+// The options passed to NewBuilder will be used in this method.
+func (b *Builder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (r resolver.Resolver, err error) {
 	_, authority, endpoint, err := parseTarget(target)
 	if err != nil {
 		err = fmt.Errorf("parse target: %v", err)
@@ -74,11 +101,16 @@ func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, opts res
 			return
 		}
 
+		if b.options.kvResolver == nil {
+			b.options.kvResolver = new(DefaultEtcdKvResolver)
+		}
+
 		ctx, cancel := context.WithCancel(context.Background())
 
 		er := &etcdResolver{
 			cli:           b.options.etcdClient,
 			srv:           endpoint,
+			kvResolver:    b.options.kvResolver,
 			cc:            cc,
 			ctx:           ctx,
 			cancel:        cancel,
@@ -105,9 +137,7 @@ func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, opts res
 		}
 
 		if b.options.dnsPollingInterval == 0 {
-			err = fmt.Errorf("the authority in target is %q but missing WithDNSPollingInterval option when NewBuilder",
-				authority)
-			return
+			b.options.dnsPollingInterval = time.Second * 30
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())

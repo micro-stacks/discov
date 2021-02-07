@@ -3,7 +3,6 @@ package discov
 import (
 	"context"
 	"errors"
-	"fmt"
 	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc/resolver"
 	"net"
@@ -76,11 +75,6 @@ func parseEndpointInDNSTarget(endpoint string) (DNSName string, port int, err er
 	}
 
 	DNSName = s[0]
-	return
-}
-
-func getEtcdKeyPrefix(srv string) (keyPrefix string) {
-	keyPrefix = fmt.Sprintf("/srv/%s", srv)
 	return
 }
 
