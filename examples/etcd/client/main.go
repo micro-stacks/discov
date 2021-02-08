@@ -3,19 +3,22 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/micro-stacks/discov"
-	pb "github.com/micro-stacks/discov/examples/proto"
 	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
-	"os"
-	"time"
+
+	"github.com/micro-stacks/discov"
+	pb "github.com/micro-stacks/discov/examples/proto"
 )
 
 const (
 	etcdAddr = "etcd:2379"
+	myScheme   = "discovs"
 )
 
 var greetingSrv pb.GreetingClient
@@ -39,11 +42,12 @@ func init() {
 	}
 
 	resolver.Register(discov.NewBuilder(
+		discov.WithCustomScheme(myScheme),
 		discov.WithEtcdClient(cli),
 		discov.WithEtcdKvResolver(new(etcdKvResolver)),
 	))
 
-	greetingClientConn, err := grpc.Dial("discov://etcd/greeting", grpc.WithBlock(), grpc.WithInsecure())
+	greetingClientConn, err := grpc.Dial(fmt.Sprintf("%s://%s", myScheme, "etcd/greeting"), grpc.WithBlock(), grpc.WithInsecure())
 	if err != nil {
 		panic(err)
 	}
