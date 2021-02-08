@@ -3,15 +3,17 @@ package discov
 import (
 	"context"
 	"errors"
-	"go.etcd.io/etcd/clientv3"
-	"google.golang.org/grpc/resolver"
 	"net"
 	"strconv"
 	"strings"
 	"time"
+
+	"go.etcd.io/etcd/clientv3"
+	"google.golang.org/grpc/resolver"
 )
 
 const (
+	defaultScheme = "discov"
 	authorityEtcd = "etcd"
 	authorityDNS  = "dns"
 )

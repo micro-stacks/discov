@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.etcd.io/etcd/clientv3"
-	"google.golang.org/grpc/resolver"
 	"net"
 	"sync"
 	"time"
+
+	"go.etcd.io/etcd/clientv3"
+	"google.golang.org/grpc/resolver"
 )
 
 // Builder implements the gRPC resolver.Builder interface.
@@ -19,6 +20,7 @@ type Builder struct {
 }
 
 type builderOptions struct {
+	customScheme string
 	// etcd
 	etcdClient *clientv3.Client
 	kvResolver EtcdKvResolver
@@ -61,6 +63,15 @@ func WithDNSPollingInterval(d time.Duration) BuilderOption {
 	}
 }
 
+// WithCustomScheme customizes scheme name of the internal protocol.
+func WithCustomScheme(scheme string) BuilderOption {
+	return BuilderOption{
+		applyTo: func(options *builderOptions) {
+			options.customScheme = scheme
+		},
+	}
+}
+
 // NewBuilder returns a Builder that contain the passed options.
 func NewBuilder(opts ...BuilderOption) *Builder {
 	options := new(builderOptions)
@@ -70,9 +81,12 @@ func NewBuilder(opts ...BuilderOption) *Builder {
 	return &Builder{options: options}
 }
 
-// Scheme returns the scheme "discov" correspond to the Builder.
+// Scheme returns the scheme correspond to the Builder.
 func (b *Builder) Scheme() string {
-	return "discov"
+	if b.options.customScheme != "" {
+		return b.options.customScheme
+	}
+	return defaultScheme
 }
 
 // Build creates a new resolver for the given target.
